@@ -1,6 +1,6 @@
 import { useState } from "react";
 import AppShell from "@/components/Layout/AppShell";
-import ChatWindow from "@/components/Chat/ChatWindow";
+import AvatarScene from "@/components/Avatar/AvatarScene";
 import DashboardPage from "@/components/Dashboard/DashboardPage";
 import ProfilePage from "@/components/Profile/ProfilePage";
 
@@ -9,7 +9,7 @@ const Index = () => {
 
   return (
     <AppShell activeTab={activeTab} onTabChange={setActiveTab}>
-      {activeTab === "chat" && <ChatWindow />}
+      {activeTab === "chat" && <AvatarScene />}
       {activeTab === "dashboard" && <DashboardPage />}
       {activeTab === "profile" && <ProfilePage />}
     </AppShell>
