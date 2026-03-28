@@ -2,15 +2,18 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import aiAvatar from "@/assets/ai-avatar.png";
+import { v4 as uuid } from "uuid";
 
 const greetingText =
-  "Welcome! I'm your ET AI Concierge — your personalized guide to the Economic Times ecosystem. Tell me about your financial goals and I'll find the perfect products for you.";
+  "Welcome! I'm your ET AI Concierge -- your personalized guide to the Economic Times ecosystem. Tell me about your financial goals and I'll find the perfect products for you.";
 
 const mockResponses = [
   "That's a great goal! Based on your interest in growth investing, I'd recommend exploring ET Markets for real-time insights and ET Prime for expert analysis. Would you like me to walk you through the benefits?",
   "Excellent choice! For someone at your level, I suggest starting with our curated watchlists on ET Markets. Combined with ET Masterclass sessions on portfolio management, you'll have a solid foundation. Shall I set that up?",
   "Perfect! I've noted your preferences. Let me put together a personalized dashboard with the ET products that match your profile. You'll get real-time alerts, expert commentary, and exclusive research reports.",
 ];
+
+const API_BASE = import.meta.env.VITE_API_BASE as string | undefined;
 
 const AvatarScene = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -20,6 +23,8 @@ const AvatarScene = () => {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [micActive, setMicActive] = useState(false);
   const [messageIndex, setMessageIndex] = useState(0);
+  const [conversationId, setConversationId] = useState<string>(uuid());
+  const [isLoading, setIsLoading] = useState(false);
   const [visualizerBars, setVisualizerBars] = useState<number[]>(
     Array(24).fill(0)
   );
@@ -72,14 +77,46 @@ const AvatarScene = () => {
 
   const handleSend = useCallback(() => {
     if (!input.trim()) return;
+    const payload = input.trim();
     setInput("");
     setDisplayedText("");
-    setTimeout(() => {
-      const resp = mockResponses[messageIndex % mockResponses.length];
-      setCurrentText(resp);
-      setMessageIndex((i) => i + 1);
-    }, 800);
-  }, [input, messageIndex]);
+    const send = async () => {
+      setIsLoading(true);
+      if (!API_BASE) {
+        const resp = mockResponses[messageIndex % mockResponses.length];
+        setCurrentText(resp);
+        setMessageIndex((i) => i + 1);
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const token = localStorage.getItem("idToken");
+        const res = await fetch(`${API_BASE}/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            message: payload,
+            conversationId,
+            voiceEnabled,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.error || "Chat failed");
+        }
+        setConversationId(data.conversationId || conversationId);
+        setCurrentText(data.response || "Received.");
+      } catch (err: any) {
+        setCurrentText(err.message || "Something went wrong. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    void send();
+  }, [input, messageIndex, conversationId, voiceEnabled]);
 
   return (
     <div className="flex flex-col h-full bg-gradient-dark relative overflow-hidden">
@@ -315,7 +352,7 @@ const AvatarScene = () => {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || isLoading}
             className="p-3 rounded-xl bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-all shadow-glow"
           >
             <Send className="w-5 h-5" />
@@ -327,3 +364,4 @@ const AvatarScene = () => {
 };
 
 export default AvatarScene;
+
