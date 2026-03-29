@@ -3,7 +3,7 @@
 ## 1. Executive Summary
 ET AI Concierge is an AI-powered personalization engine for the Economic Times ecosystem. It onboards users in a short conversation, builds a structured financial profile, and delivers personalized ET product recommendations with direct navigation actions.
 
-App Link: https://ethackthon.skillrouteai.com
+App Link: https://ethackathon.skillrouteai.com
 
 ## 2. Problem Statement
 ET has a massive ecosystem (ET Prime, ET Markets, masterclasses, corporate events, wealth summits, and financial services), but users discover only a fraction. We built an AI concierge that understands the user in one conversation and guides them to the right products and services.
