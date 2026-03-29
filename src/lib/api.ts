@@ -1,14 +1,6 @@
-// API base resolution (priority):
-// 1) VITE_FORCE_API_BASE (explicit override)
-// 2) Localhost default to SAM at 127.0.0.1:3000
-// 3) VITE_API_BASE
+// API base resolution: use explicit env only (no localhost auto-override).
 const forcedBase = import.meta.env.VITE_FORCE_API_BASE as string | undefined;
-const API_BASE =
-  forcedBase
-    ? forcedBase
-    : (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"))
-      ? "http://127.0.0.1:3000"
-      : (import.meta.env.VITE_API_BASE as string);
+const API_BASE = forcedBase || (import.meta.env.VITE_API_BASE as string);
 
 export interface Action {
   title: string;

@@ -287,7 +287,12 @@ export default function ChatPage({ userId, email, profile, onOnboardingComplete,
             {voiceEnabled ? <Volume2 className="w-5 h-5 text-primary" /> : <VolumeX className="w-5 h-5" />}
           </button>
 
-          {/* STT mic */}
+          <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
+            placeholder={isListening ? "Listening..." : isOnboarding ? "Tell me about yourself..." : "Ask me anything..."}
+            className="flex-1 px-4 py-2.5 rounded-xl bg-muted border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 transition-all" />
+
+          {/* STT mic (placed beside Send) */}
           {sttSupported && (
             <button onClick={toggleMic}
               className={`p-2.5 rounded-xl transition-all flex-shrink-0 ${isListening ? "bg-red-500/20 text-red-500 animate-pulse" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
@@ -295,11 +300,6 @@ export default function ChatPage({ userId, email, profile, onOnboardingComplete,
               {isListening ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
           )}
-
-          <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder={isListening ? "Listening..." : isOnboarding ? "Tell me about yourself..." : "Ask me anything..."}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-muted border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 transition-all" />
 
           <motion.button whileTap={{ scale: 0.95 }} onClick={handleSend} disabled={!input.trim() || isTyping}
             className="p-2.5 rounded-xl bg-primary text-primary-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-all shadow-glow flex-shrink-0">
