@@ -1,0 +1,246 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ET AI Concierge backend (HTTP API + Lambdas + DynamoDB + Polly audio bucket)
+
+Parameters:
+  StageName:
+    Type: String
+    Default: prod
+  CognitoUserPoolId:
+    Type: String
+    Description: Existing Cognito User Pool ID (ap-south-1_*)
+  CognitoUserPoolClientId:
+    Type: String
+    Description: Existing Cognito App Client ID
+  CognitoUserPoolRegion:
+    Type: String
+    Default: ap-south-1
+    Description: Region of the Cognito User Pool
+  BedrockModelId:
+    Type: String
+    Default: anthropic.claude-3-sonnet-20240229-v1:0
+  BedrockRegion:
+    Type: String
+    Default: us-east-1
+  PollyVoiceId:
+    Type: String
+    Default: Joanna
+  PollyAudioBucketName:
+    Type: String
+    Description: Globally unique S3 bucket name for Polly audio
+  DeploymentBucket:
+    Type: String
+    Description: S3 bucket for SAM artifacts (sam deploy --s3-bucket)
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 15
+    MemorySize: 512
+    Architectures: [x86_64]
+    Handler: app.lambda_handler
+    Tracing: Active
+    Environment:
+      Variables:
+        POWERTOOLS_TRACE_DISABLED: true
+
+Resources:
+  ConversationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: conversationId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: conversationId
+          KeyType: RANGE
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  RecommendationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  AudioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref PollyAudioBucketName
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [GET, PUT]
+            AllowedOrigins: ["*"]
+            MaxAge: 300
+
+  SharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      ContentUri: src/layer
+      CompatibleRuntimes:
+        - python3.11
+      RetentionPolicy: Retain
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref StageName
+      CorsConfiguration:
+        AllowMethods: [GET, POST, PUT, OPTIONS]
+        AllowOrigins: ["*"]
+        AllowHeaders: ["*"]
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${CognitoUserPoolRegion}.amazonaws.com/${CognitoUserPoolId}"
+              audience:
+                - !Ref CognitoUserPoolClientId
+            IdentitySource: "$request.header.Authorization"
+        DefaultAuthorizer: CognitoAuthorizer
+
+  ChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/chat_handler/
+      Layers:
+        - !Ref SharedLayer
+      Events:
+        ChatApi:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /chat
+            Method: POST
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConversationsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RecommendationsTable
+        - S3CrudPolicy:
+            BucketName: !Ref PollyAudioBucketName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - polly:SynthesizeSpeech
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_CONVERSATIONS: !Ref ConversationsTable
+          DYNAMODB_TABLE_USERS: !Ref UsersTable
+          DYNAMODB_TABLE_RECOMMENDATIONS: !Ref RecommendationsTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_REGION: !Ref BedrockRegion
+          POLLY_AUDIO_BUCKET: !Ref PollyAudioBucketName
+          POLLY_VOICE_ID: !Ref PollyVoiceId
+
+  ProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/profile_handler/
+      Layers:
+        - !Ref SharedLayer
+      Events:
+        GetProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /profile
+            Method: GET
+        PutProfile:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /profile
+            Method: PUT
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref ConversationsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_CONVERSATIONS: !Ref ConversationsTable
+          DYNAMODB_TABLE_USERS: !Ref UsersTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_REGION: !Ref BedrockRegion
+
+  RecommendationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/recommendation_handler/
+      Layers:
+        - !Ref SharedLayer
+      Events:
+        GetRecommendations:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /recommendations
+            Method: GET
+        RefreshRecommendations:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /recommendations/refresh
+            Method: POST
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RecommendationsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_USERS: !Ref UsersTable
+          DYNAMODB_TABLE_RECOMMENDATIONS: !Ref RecommendationsTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_REGION: !Ref BedrockRegion
+
+Outputs:
+  ApiEndpoint:
+    Description: HTTP API endpoint
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}"
+  ConversationsTableName:
+    Value: !Ref ConversationsTable
+  UsersTableName:
+    Value: !Ref UsersTable
+  RecommendationsTableName:
+    Value: !Ref RecommendationsTable
+  AudioBucketName:
+    Value: !Ref PollyAudioBucketName

@@ -1,0 +1,342 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ET AI Concierge backend - CloudFormation native deployment
+
+Parameters:
+  CognitoUserPoolId:
+    Type: String
+    Default: ap-south-1_R1cmGkY0f
+  CognitoUserPoolClientId:
+    Type: String
+    Default: 53juobs9osbv16uudmppvuajob
+  CognitoUserPoolRegion:
+    Type: String
+    Default: ap-south-1
+  BedrockModelId:
+    Type: String
+    Default: anthropic.claude-3-sonnet-20240229-v1:0
+  BedrockRegion:
+    Type: String
+    Default: us-east-1
+  PollyVoiceId:
+    Type: String
+    Default: Joanna
+  PollyAudioBucketName:
+    Type: String
+    Default: et-ai-polly-audio-925181413644
+  ArtifactsBucket:
+    Type: String
+    Default: et-ai-concierge-sam-artifacts-925181413644
+
+Resources:
+
+  # ── DynamoDB Tables ──────────────────────────────────────────────────────────
+  ConversationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: et-ai-conversations
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: conversationId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: conversationId
+          KeyType: RANGE
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: et-ai-users
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  RecommendationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: et-ai-recommendations
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  # ── Lambda IAM Role ──────────────────────────────────────────────────────────
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: et-ai-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: et-ai-lambda-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt ConversationsTable.Arn
+                  - !GetAtt UsersTable.Arn
+                  - !GetAtt RecommendationsTable.Arn
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - polly:SynthesizeSpeech
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${PollyAudioBucketName}/*"
+
+  # ── Lambda Layer ─────────────────────────────────────────────────────────────
+  SharedLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: et-ai-shared-layer
+      Content:
+        S3Bucket: !Ref ArtifactsBucket
+        S3Key: layer.zip
+      CompatibleRuntimes:
+        - python3.11
+
+  # ── Lambda Functions ─────────────────────────────────────────────────────────
+  ChatFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: et-ai-chat-handler
+      Runtime: python3.11
+      Handler: app.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Layers:
+        - !Ref SharedLayer
+      Code:
+        S3Bucket: !Ref ArtifactsBucket
+        S3Key: chat_handler.zip
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_CONVERSATIONS: !Ref ConversationsTable
+          DYNAMODB_TABLE_USERS: !Ref UsersTable
+          DYNAMODB_TABLE_RECOMMENDATIONS: !Ref RecommendationsTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_REGION: !Ref BedrockRegion
+          POLLY_AUDIO_BUCKET: !Ref PollyAudioBucketName
+          POLLY_VOICE_ID: !Ref PollyVoiceId
+
+  ProfileFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: et-ai-profile-handler
+      Runtime: python3.11
+      Handler: app.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Layers:
+        - !Ref SharedLayer
+      Code:
+        S3Bucket: !Ref ArtifactsBucket
+        S3Key: profile_handler.zip
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_CONVERSATIONS: !Ref ConversationsTable
+          DYNAMODB_TABLE_USERS: !Ref UsersTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_REGION: !Ref BedrockRegion
+
+  RecommendationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: et-ai-recommendation-handler
+      Runtime: python3.11
+      Handler: app.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 512
+      Layers:
+        - !Ref SharedLayer
+      Code:
+        S3Bucket: !Ref ArtifactsBucket
+        S3Key: recommendation_handler.zip
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_USERS: !Ref UsersTable
+          DYNAMODB_TABLE_RECOMMENDATIONS: !Ref RecommendationsTable
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_REGION: !Ref BedrockRegion
+
+  # ── API Gateway HTTP API ──────────────────────────────────────────────────────
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: et-ai-concierge-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - OPTIONS
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - "*"
+        MaxAge: 300
+
+  CognitoAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      Name: CognitoAuthorizer
+      IdentitySource:
+        - "$request.header.Authorization"
+      JwtConfiguration:
+        Audience:
+          - !Ref CognitoUserPoolClientId
+        Issuer: !Sub "https://cognito-idp.${CognitoUserPoolRegion}.amazonaws.com/${CognitoUserPoolId}"
+
+  # Lambda permissions for API Gateway
+  ChatFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ChatFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+
+  ProfileFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ProfileFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+
+  RecommendationFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt RecommendationFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+
+  # Integrations
+  ChatIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ChatFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ProfileIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ProfileFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  RecommendationIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt RecommendationFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  # Routes
+  ChatRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /chat"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub "integrations/${ChatIntegration}"
+
+  GetProfileRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /profile"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub "integrations/${ProfileIntegration}"
+
+  PutProfileRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "PUT /profile"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub "integrations/${ProfileIntegration}"
+
+  GetRecommendationsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "GET /recommendations"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub "integrations/${RecommendationIntegration}"
+
+  RefreshRecommendationsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "POST /recommendations/refresh"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref CognitoAuthorizer
+      Target: !Sub "integrations/${RecommendationIntegration}"
+
+  # Stage
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: prod
+      AutoDeploy: true
+
+Outputs:
+  ApiEndpoint:
+    Description: HTTP API endpoint URL
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Export:
+      Name: et-ai-api-endpoint
+  ConversationsTableName:
+    Value: !Ref ConversationsTable
+  UsersTableName:
+    Value: !Ref UsersTable
+  RecommendationsTableName:
+    Value: !Ref RecommendationsTable

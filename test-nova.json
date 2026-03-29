@@ -1,0 +1,1 @@
+﻿{"messages":[{"role":"user","content":[{"text":"Reply with only this JSON: {\"reply\":\"hello world\",\"user_type\":\"test\",\"actions\":[]}"}]}],"inferenceConfig":{"maxTokens":200}}
