@@ -22,6 +22,15 @@ Frontend (Vite React SPA)
 → DynamoDB (state)  
 → S3 (audio)
 
+## Architecture Diagrams
+High-Level System Architecture:
+
+![](AWS-Architecture-High-Level-System.png)
+
+Detailed AWS Architecture:
+
+![](AWS-Detailed-Architecture.png)
+
 ## 5. Frontend Components
 Tech: Vite + React (JS/JSX), Tailwind, shadcn/ui, react-oidc-context
 
@@ -136,11 +145,3 @@ npm run dev
 Unlike traditional chatbots, the AI does not only respond. It performs actions by navigating users across the ET ecosystem via structured action payloads.
 
 
-## Architecture Diagrams
-High-Level System Architecture:
-
-![](AWS-Architecture-High-Level-System.png)
-
-Detailed AWS Architecture:
-
-![](AWS-Detailed-Architecture.png)
