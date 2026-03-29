@@ -1,144 +1,163 @@
-# System Design: ET AI Concierge
+# System Design: ET AI Concierge (Advanced)
 
-## Problem Statement (Hackathon)
-ET has a massive ecosystem (ET Prime, ET Markets, masterclasses, corporate events, wealth summits, financial services). Most users discover only a small fraction. Build an AI concierge that understands the user in one conversation and guides them to the right ET products and services.
+## 1. System Overview
+ET AI Concierge is a serverless, AI-driven personalization platform that turns user conversations into a guided journey across the Economic Times ecosystem. It performs onboarding, profile extraction, recommendation generation, and action-based navigation.
 
-## Solution Overview
-ET AI Concierge is a full-stack, serverless AI system. It onboards users through a short chat, extracts a structured financial profile, and returns personalized recommendations and navigation actions. The architecture is designed for fast onboarding, secure personalization, and scalable inference.
+## 2. Layered Architecture (Enterprise Style)
+Presentation Layer
+- React SPA (Amplify)
+- Chat UI + Dashboard + Navigation
 
-## High-Level Architecture
+Application Layer
+- API Gateway (routing + JWT validation)
+- Lambda functions (business logic)
+
+Intelligence Layer
+- Amazon Bedrock (LLM)
+- Prompt orchestration + structured output
+
+Data Layer
+- DynamoDB (state management)
+- S3 (audio + assets)
+
+## 3. Component Diagram (UML)
 ```mermaid
-graph TD
-  User["User Browser"]
-  FE["Vite React SPA"]
-  Cognito["Cognito User Pool"]
-  APIGW["API Gateway HTTP API - JWT Authorizer"]
-  Chat["Lambda - chat_handler"]
-  Profile["Lambda - profile_handler"]
-  Reco["Lambda - recommendation_handler"]
-  Bedrock["Amazon Bedrock - Nova Lite"]
-  DDB["DynamoDB - Users / Conversations / Recommendations"]
-  Polly["Amazon Polly + S3"]
-
-  User --> FE
-  FE --> Cognito
-  FE --> APIGW
-  APIGW --> Chat
-  APIGW --> Profile
-  APIGW --> Reco
-  Chat --> Bedrock
-  Profile --> Bedrock
-  Reco --> Bedrock
-  Chat --> DDB
-  Profile --> DDB
-  Reco --> DDB
-  Chat --> Polly
-```
-
-## AWS Architecture Diagram
-```mermaid
-graph LR
-  subgraph AWS
-    Cognito["Cognito User Pool"]
-    APIGW["API Gateway HTTP API"]
-    subgraph Lambda
-      Chat["chat_handler"]
-      Profile["profile_handler"]
-      Reco["recommendation_handler"]
-      Layer["bedrock_client (Layer)"]
-    end
-    DDB["DynamoDB Tables"]
-    Bedrock["Amazon Bedrock"]
-    Polly["Amazon Polly"]
-    S3["S3 Audio Bucket"]
+graph TB
+  subgraph Frontend
+    UI["React UI"]
+    Chat["Chat Component"]
+    Dashboard["Dashboard"]
   end
-  FE["Amplify Hosted SPA"] --> Cognito
-  FE --> APIGW
-  APIGW --> Chat
-  APIGW --> Profile
-  APIGW --> Reco
-  Chat --> Layer
-  Profile --> Layer
-  Reco --> Layer
-  Layer --> Bedrock
-  Chat --> DDB
-  Profile --> DDB
-  Reco --> DDB
-  Chat --> Polly
-  Polly --> S3
+
+  subgraph Backend
+    APIGW["API Gateway"]
+    ChatL["chat_handler"]
+    ProfileL["profile_handler"]
+    RecoL["recommendation_handler"]
+  end
+
+  subgraph AI
+    Bedrock["Amazon Bedrock"]
+  end
+
+  subgraph Data
+    Users["Users Table"]
+    Conv["Conversations Table"]
+    Reco["Recommendations Table"]
+  end
+
+  UI --> APIGW
+  Chat --> APIGW
+  Dashboard --> APIGW
+
+  APIGW --> ChatL
+  APIGW --> ProfileL
+  APIGW --> RecoL
+
+  ChatL --> Bedrock
+  ProfileL --> Bedrock
+  RecoL --> Bedrock
+
+  ChatL --> Conv
+  ProfileL --> Users
+  RecoL --> Reco
 ```
 
-## Key Components
-### Frontend
-- Vite + React (JS/JSX), Tailwind, shadcn/ui
-- Auth via `react-oidc-context` using Cognito Hosted UI
-- Chat, Dashboard, Profile, and ET product pages
-- Web Speech API for STT; Polly URL playback for TTS
+## 4. Detailed Data Flow (UML)
+```mermaid
+flowchart LR
+  User --> Frontend
+  Frontend --> API
+  API --> Lambda
+  Lambda --> Bedrock
+  Lambda --> DynamoDB
+  DynamoDB --> Lambda
+  Lambda --> Frontend
+```
 
-### Backend
-- `chat_handler`: chat orchestration, profile updates, optional Polly audio
-- `profile_handler`: profile retrieval + extraction from conversation
-- `recommendation_handler`: personalized recommendations
-- `bedrock_client` Lambda Layer: Bedrock calls + JSON validation
+## 5. Request Lifecycle
+Chat Request Flow
+1. User sends message
+2. Frontend -> API Gateway
+3. API Gateway -> chat_handler
+4. chat_handler loads profile + history, calls Bedrock, builds structured response
+5. Persist messages + optional profile update in DynamoDB
+6. Return reply + actions to frontend
 
-## Key Flows
-### Onboarding Flow
+## 6. AI Decision Logic (Expanded)
+The AI system performs a four-step reasoning pipeline:
+1. Profile extraction: identify profession, goals, experience, income, risk
+2. User classification: label the user segment for personalization
+3. Recommendation generation: produce ET product/service suggestions
+4. Action mapping: convert recommendations into navigation actions
+
+## 7. Sequence Diagram
 ```mermaid
 sequenceDiagram
   participant U as User
   participant FE as Frontend
   participant AG as API Gateway
   participant CH as chat_handler
-  participant BR as Bedrock
+  participant AI as Bedrock
   participant DB as DynamoDB
 
   U->>FE: Send message
-  FE->>AG: POST /chat
+  FE->>AG: API Request
   AG->>CH: Invoke
-  CH->>DB: Load history + profile
-  CH->>BR: invoke_chat (onboarding)
-  BR-->>CH: JSON reply + profile_update
-  CH->>DB: Save conversation + profile
-  CH-->>FE: reply + actions
+  CH->>DB: Get profile and history
+  CH->>AI: Send context
+  AI-->>CH: Response JSON
+  CH->>DB: Save data
+  CH-->>FE: Reply + actions
 ```
 
-### Recommendations Flow
+## 8. AWS Architecture (Detailed)
 ```mermaid
-sequenceDiagram
-  participant FE as Frontend
-  participant AG as API Gateway
-  participant RH as recommendation_handler
-  participant BR as Bedrock
-  participant DB as DynamoDB
+graph TD
+  User["User Browser"] --> Amplify["Amplify Hosted SPA"]
+  Amplify --> Cognito["Cognito User Pool"]
+  Cognito --> APIGW["API Gateway (JWT Authorizer)"]
+  Amplify --> APIGW
 
-  FE->>AG: POST /recommendations/refresh
-  AG->>RH: Invoke
-  RH->>DB: Load profile
-  RH->>BR: generate_recommendations
-  BR-->>RH: JSON recommendations
-  RH->>DB: Save recommendations
-  RH-->>FE: recommendations
+  APIGW --> Chat["Lambda - chat_handler"]
+  APIGW --> Profile["Lambda - profile_handler"]
+  APIGW --> Reco["Lambda - recommendation_handler"]
+
+  Chat --> Bedrock["Amazon Bedrock"]
+  Profile --> Bedrock
+  Reco --> Bedrock
+
+  Chat --> Users["DynamoDB Users"]
+  Chat --> Conv["DynamoDB Conversations"]
+  Profile --> Users
+  Reco --> Recos["DynamoDB Recommendations"]
+
+  Chat --> Polly["Amazon Polly"]
+  Polly --> S3["S3 Audio Bucket"]
 ```
 
-## Data Model
-- Users: `userId`, `email`, `profile`, `onboardingComplete`
-- Conversations: `userId`, `conversationId`, `messages[]`, `updatedAt`
-- Recommendations: `userId`, `recommendations[]`, `generatedAt`
-
-## API Summary
-- `POST /chat`
-- `GET /profile`
-- `PUT /profile`
-- `GET /recommendations`
-- `POST /recommendations/refresh`
-
-## Scalability & Reliability
+## 9. Scalability Design
 - Stateless Lambdas scale horizontally
-- DynamoDB on-demand for throughput spikes
-- Bedrock abstracts model scaling
-- Fail-safe: if Polly fails, text response still returned
+- DynamoDB on-demand for bursts
+- Bedrock managed inference scaling
+- API Gateway handles concurrency
 
-## Security
-- Cognito JWT authorizer on all routes
-- UserId derived from JWT `sub` claim
-- No hardcoded secrets; env vars only
+## 10. Security Design
+- Cognito JWT authentication
+- API Gateway authorizer
+- IAM roles for service access
+- No hardcoded secrets
+
+## 11. Key Design Decisions
+- Serverless: scalable and cost-efficient
+- Bedrock: managed LLM without infra overhead
+- DynamoDB: flexible schema for AI data
+- Structured output: predictable system behavior
+
+## 12. Core Innovation
+Unlike traditional chatbots, this system does not only respond. It performs actions by navigating users across ET products using AI-generated, structured action payloads.
+
+## 13. Future Architecture
+- Multi-agent orchestration
+- Vector DB for memory and RAG
+- Real-time financial data integration

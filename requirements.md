@@ -1,49 +1,83 @@
-# Requirements: ET AI Concierge
+# Requirements: ET AI Concierge (Enhanced)
 
-## Problem Fit
-The system must map new and returning users to ET products with minimal friction. It must understand the user's financial profile in one conversation and deliver targeted recommendations.
+## 1. Business Requirements
+- Increase engagement across ET ecosystem
+- Improve product discovery
+- Provide personalized financial guidance
 
-## Functional Requirements
-1. **Authentication & Security**
-   - Cognito Hosted UI authentication
-   - JWT required for all API requests
+## 2. User Journey Requirements
+New User: Login -> AI onboarding -> Profile creation -> Dashboard
+Returning User: Login -> Load profile -> Continue AI interaction
 
-2. **Welcome Concierge (Onboarding)**
-   - 3?4 turn profiling chat
-   - Capture profession, goals, experience, income, risk
+## 3. Functional Requirements
+3.1 Authentication
+- Secure login via Cognito
+- JWT validation for all APIs
 
-3. **Financial Life Navigator**
-   - Build structured profile from chat
-   - Persist to DynamoDB Users table
+3.2 AI Onboarding
+- Conversational profiling (not forms)
+- Extract profession, goals, risk level
 
-4. **ET Ecosystem Cross?Sell Engine**
-   - Recommendations generated from profile
-   - 4?8 ET products/services with relevance scores
+3.3 Profile Management
+- Store structured user profile
+- Allow updates
 
-5. **Marketplace Agent**
-   - Actions mapped to ET services: loans, insurance, cards, wealth
+3.4 Recommendation Engine
+- Generate personalized suggestions
+- Include actionable CTAs
 
-6. **Voice Support**
-   - STT via Web Speech API
-   - Optional TTS via Polly
+3.5 Navigation Engine
+- AI triggers page navigation
+- UI responds dynamically
 
-## Non?Functional Requirements
-- Serverless AWS stack
-- Fast response time (<10s per chat)
-- JSON?structured AI responses
-- Scalable and secure
+3.6 Voice Interaction
+- Speech-to-text input
+- Optional text-to-speech output
 
-## API Contract (Must Match Implementation)
-- `POST /chat`
-  - `{ "message": "...", "conversationId": "optional", "voiceEnabled": false }`
-- `GET /profile`
-- `PUT /profile`
-  - `{ "conversationId": "..." }` or `{ "profile": {...} }`
-- `GET /recommendations`
-- `POST /recommendations/refresh`
+## 4. Non-Functional Requirements
+- Response time < 5-10 seconds
+- Scalable serverless architecture
+- Secure data handling
+- High availability
 
-## Acceptance Criteria
-- Onboarding creates a stored profile and dashboard update
-- Returning users see concierge mode
-- Recommendations are personalized and persisted
-- All endpoints protected by JWT
+## 5. Constraints
+- No real ET data, use simulated data
+- Limited time (hackathon)
+- Must be deployable on AWS
+
+## 6. Edge Cases
+- User gives incomplete data
+- AI response failure
+- Network timeout
+- Invalid JWT
+
+## 7. Success Criteria
+- Profile created successfully
+- Recommendations generated
+- Navigation works
+- Chat feels natural
+
+## 8. Performance Goals
+- Handle 1000+ users
+- Maintain low latency
+- Efficient AI calls
+
+## 9. Security Requirements
+- JWT-based authentication
+- Secure API access
+- Environment-based secrets
+
+## 10. KPI / Success Metrics
+- Increase product discovery by 30 percent
+- Reduce time to first relevant recommendation to under 3 minutes
+- Improve session engagement by 25 percent
+
+## 11. System Intelligence Requirements
+- AI must generate actionable responses with 1 to 3 actions
+- AI must trigger navigation to ET pages based on intent
+- AI must update profile fields when confidence is sufficient
+
+## 12. Future Enhancements
+- Multi-agent workflows
+- Real-time financial APIs
+- Personalized learning models
