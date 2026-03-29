@@ -20,6 +20,15 @@ Data Layer
 - DynamoDB (state management)
 - S3 (audio + assets)
 
+### AWS Architecture Diagrams
+High-Level System Architecture:
+
+![](AWS-Architecture-High-Level-System.png)
+
+Detailed AWS Architecture:
+
+![](AWS-Detailed-Architecture.png)
+
 ## 3. Component Diagram (UML)
 ```mermaid
 graph TB
