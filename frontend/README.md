@@ -1,3 +1,5 @@
-# Welcome to your Lovable project
+# ET AI Concierge (Frontend)
 
-TODO: Document your project here
+This frontend is a Vite + React (JS/JSX) app for ET AI Concierge.
+
+See the root README for the full architecture, API, and deployment flow.
