@@ -1,1 +1,0 @@
-{"output":{"message":{"content":[{"text":"{\"reply\":\"hello world\",\"user_type\":\"test\",\"actions\":[]}"}],"role":"assistant"}},"stopReason":"end_turn","usage":{"inputTokens":21,"outputTokens":16,"totalTokens":37,"cacheReadInputTokenCount":0,"cacheWriteInputTokenCount":0}}

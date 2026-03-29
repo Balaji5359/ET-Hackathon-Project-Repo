@@ -7,16 +7,16 @@ ET AI Concierge is a full-stack AI assistant for the Economic Times ecosystem. I
 ### High-Level
 ```mermaid
 graph TD
-  User[User Browser]
-  FE[Vite React SPA]
-  Cognito[Cognito User Pool]
-  APIGW[API Gateway HTTP API + JWT Authorizer]
-  Chat[Lambda: chat_handler]
-  Profile[Lambda: profile_handler]
-  Reco[Lambda: recommendation_handler]
-  Bedrock[Amazon Bedrock (Nova Lite)]
-  DDB[DynamoDB (Users/Conversations/Recommendations)]
-  Polly[Amazon Polly + S3]
+  User["User Browser"]
+  FE["Vite React SPA"]
+  Cognito["Cognito User Pool"]
+  APIGW["API Gateway HTTP API - JWT Authorizer"]
+  Chat["Lambda - chat_handler"]
+  Profile["Lambda - profile_handler"]
+  Reco["Lambda - recommendation_handler"]
+  Bedrock["Amazon Bedrock - Nova Lite"]
+  DDB["DynamoDB - Users / Conversations / Recommendations"]
+  Polly["Amazon Polly + S3"]
 
   User --> FE
   FE --> Cognito
